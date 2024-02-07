@@ -6,7 +6,8 @@
 -record(client_st, {
     gui, % atom of the GUI process
     nick, % nick/username of the client
-    server % atom of the chat server
+    server, % atom of the chat server
+    channels
 }).
 
 % Return an initial state record. This is called from GUI.
@@ -15,7 +16,8 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
     #client_st{
         gui = GUIAtom,
         nick = Nick,
-        server = ServerAtom
+        server = ServerAtom,
+        channels = []
     }.
 
 % handle/2 handles each kind of request from GUI
@@ -30,19 +32,42 @@ initial_state(Nick, GUIAtom, ServerAtom) ->
 handle(St, {join, Channel}) ->
     % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, {error, not_implemented, "join not implemented"}, St} ;
+    case lists:member(St#client_st.server, registered()) of
+        true ->
+            Result = genserver:request(St#client_st.server, {join, Channel, self()}),
+            case Result of
+                joined ->
+                    {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
+                failed ->
+                    {reply, {error, user_already_joined, "Already in channel"}, St}
+            end;
+        false ->
+            {reply, {error, server_not_reached, "Server not available"}, St}
+    end;
+    
 
 % Leave channel
 handle(St, {leave, Channel}) ->
     % TODO: Implement this function
-    % {reply, ok, St} ;
-    {reply, {error, not_implemented, "leave not implemented"}, St} ;
+    case lists:member(Channel, St#client_st.channels) of
+        true ->
+            genserver:request(list_to_atom(Channel), {leave, self()}),
+            {reply, ok, St#client_st{channels = lists:delete(Channel, St#client_st.channels)}};
+        false ->
+            {reply, {error, user_not_joined, "Not in channel"}, St}
+    end;
 
 % Sending message (from GUI, to channel)
 handle(St, {message_send, Channel, Msg}) ->
     % TODO: Implement this function
     % {reply, ok, St} ;
-    {reply, {error, not_implemented, "message sending not implemented"}, St} ;
+    Result = genserver:request(list_to_atom(Channel), {message, Channel, St#client_st.nick, Msg, self()}),
+    case Result of
+        ok ->
+            {reply, ok, St};
+        failed ->
+            {reply, {error, user_not_joined, "Not in channel"}, St}
+    end;
 
 % This case is only relevant for the distinction assignment!
 % Change nick (no check, local only)
@@ -68,5 +93,5 @@ handle(St, quit) ->
     {reply, ok, St} ;
 
 % Catch-all for any unhandled requests
-handle(St, Data) ->
+handle(St, _Data) ->
     {reply, {error, not_implemented, "Client does not handle this command"}, St} .
