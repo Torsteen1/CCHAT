@@ -34,12 +34,13 @@ handle(St, {join, Channel}) ->
     % {reply, ok, St} ;
     case lists:member(St#client_st.server, registered()) of
         true ->
-            Result = genserver:request(St#client_st.server, {join, Channel, self()}),
-            case Result of
-                joined ->
-                    {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
-                failed ->
-                    {reply, {error, user_already_joined, "Already in channel"}, St}
+            try genserver:request(St#client_st.server, {join, Channel, self()}) of
+                    joined ->
+                        {reply, ok, St#client_st{channels = [Channel | St#client_st.channels]}};
+                    failed ->
+                        {reply, {error, user_already_joined, "Already in channel"}, St}
+            catch
+                _ ->  {reply, {error, server_not_reached, "Server not available"}, St}
             end;
         false ->
             {reply, {error, server_not_reached, "Server not available"}, St}
@@ -61,12 +62,18 @@ handle(St, {leave, Channel}) ->
 handle(St, {message_send, Channel, Msg}) ->
     % TODO: Implement this function
     % {reply, ok, St} ;
-    Result = genserver:request(list_to_atom(Channel), {message, Channel, St#client_st.nick, Msg, self()}),
-    case Result of
-        ok ->
-            {reply, ok, St};
-        failed ->
-            {reply, {error, user_not_joined, "Not in channel"}, St}
+    ChannelAtom = list_to_atom(Channel),
+    case whereis(ChannelAtom) of
+        undefined -> 
+            {reply, {error, server_not_reached, "server doesn't exist"}, St};
+        _ ->
+            Result = genserver:request(list_to_atom(Channel), {message, Channel, St#client_st.nick, Msg, self()}),
+            case Result of
+            ok ->
+                {reply, ok, St};
+            failed ->
+                {reply, {error, user_not_joined, "Not in channel"}, St}
+            end
     end;
 
 % This case is only relevant for the distinction assignment!

@@ -376,7 +376,6 @@ write_not_joined2_test() ->
 write_not_joined3_test() ->
     init("write_not_joined3"),
     Channel = new_channel(),
-
     % Client
     {_Pid, _Nick, ClientAtom} = new_client(),
     Result = request(ClientAtom,{message_send,Channel,"hi"}),

@@ -3,7 +3,9 @@
 
 start(ServerAtom) ->
     genserver:start(ServerAtom, [], fun handler/2).
+    
 
+    
 handler(S, {join, Ch, Client}) ->
     case lists:member(Ch, S) of
         true ->
@@ -53,9 +55,11 @@ channel(Clients, {message, Channel, Nick, Msg, From}) ->
                 Clients) end),
             {reply, ok, Clients};
         false ->
+
             {reply, failed, Clients}
     end.
 
 stop(ServerAtom) ->
     genserver:request(ServerAtom, kill_channels),
     genserver:stop(ServerAtom).
+    
